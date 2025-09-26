@@ -1,0 +1,179 @@
+---
+title: "ps3_MultipleDecrement_b"
+name: "Andrea Cristina Ruiz"
+date: "2025-09-29"
+format: pdf
+editor: visual
+---
+
+## \-\--
+
+```{r}
+#settup 
+#install.packages("rmarkdown") 
+#install.packages("tinytex") 
+#install.packages("miktex") 
+#install.packages("Rtools") #something about it not available for my version of R
+#install.packages("pdflatex") 
+#install.packages("quarto")
+#library(HMDHFDplus)
+library(dplyr)
+library(ggplot2)
+library(tidyverse) 
+library(tinytex)
+library(miktex)
+library(pdflatex)
+library(quatro)
+```
+
+---
+## Second-level header {#introduction .important .large}
+Folded: Downloading the data
+---
+
+Downloading the data and keeping only 2005 life table data
+
+```{r}
+##"Step 1: Obtain the 2005 single year age-specific death probabilities from the Human Mortality Databas"
+#death probability is q_x
+
+####Question 1 get life table values directly.
+  # Set your HMD credentials. attaches values to names with my creds. will give that info to the webpage when i request entry
+    username <- "acruiz4@wisc.edu"
+    password <- "Milodem25!" 
+    
+  #next, pull the data. Idk why, but it seems important to run the library before
+    library(HMDHFDplus)
+      #item: "blt" is building life table, "per" is period life table, "1x1" ys the year increments. 
+    
+    #for USA ALL in 2005 tables. Combines Both sexes
+    usa_data_pull <- readHMDweb(CNTRY = "USA", 
+                                 item = "bltper_1x1", # Period life tables by single year
+                           username = username,
+                           password = password)
+                                    
+      #for USA males in 2005 tables change item to 
+                 #for males item = "mltper_1x1", 
+                  #for females item = "fltper_1x1",  
+   
+#filter to keep only 2005. can use base or dplyr. try using dplyr. "filter() function is used to subset a data frame, retaining all rows that satisfy your conditions. To be retain"
+    
+    usa_2005 <- usa_data_pull %>%
+               filter(Year == 2005) 
+    
+               View(usa_2005)  #check. I see 111 observations all 2005. Great!
+               
+   #clean up. remove things i dont need 
+     rm(usa_data_pull, password, username, usa_data_pull)
+```
+
+Question 1a) What proportion of Wisconsinites who live to age 16 will live to age 31 without experiencing a motor vehicle crash?\
+Answer: 17.92693
+
+Process: A proportion requires a denominator and a numerator. In this problem, the **denominator**, $l_0$ will be 85,000, total number of people alive at age 16
+
+The **numerator** will be the number of people who **live** to age 31 without a crash. Sum of people who don't die/ people at age 16. Ingredients:
+
+-   Not dying from a car crash in period is estimated as the total number of people minus people dying from cause i (crash) at age n. $l_n -l^i_{n}*p^i_n$ Surviving one period = not dying in one period.
+
+-   Sum this up for every year between 16 and 31. $\Sigma _{n=16}^{31} [l_n - (l^i_{n}*p^i_n)]$
+
+    -   The probability that someone crashes (i) at any age is $q^i_x =0.062 - 0.000053*(\textrm{age} ^2)$. Applying the formula at age 16 that is $0.062 - 0.000053*(16^2)$,
+
+    -   Deaths at each interval are $d_x = l^i_{n}*p^i_n$
+
+    -   Number of people not dying from crashes is $l_n-l^i_n$ \### NOT SO SURE ABOUT THIS CALCULATION. Confirm.
+
+```{r}
+#first make a new variable for the probability of people dying from crashes in each age . 
+            #didnt work because it didnt call a data frame. QUESTION- how would I update this equation to work better? 
+      #prob_crash_die = 0.062 - 0.000053 * (Age^2)
+
+#second try. mutate the data frame 
+usa_2005 <- usa_2005 %>%
+     mutate(prob_crash_die = 0.062 - 0.000053 * (Age^2))
+
+#second, calculate how many people die from crashes at each age interval. l_n *prob dying from crash.  
+usa_2005 <- usa_2005 %>%
+     mutate(crash_deaths = prob_crash_die*lx)
+
+#Question. should it be ppl from the year before. 15 yr old alive * 16 yr old prob dying??
+
+#third find out who does not die from crashes per year. Aka- who lives. 
+usa_2005 <- usa_2005 %>%
+     mutate(ln_minus_crshdeath = lx - crash_deaths)
+      #add new var with better name 
+     usa_2005 <- usa_2005 %>%
+           mutate(didnt_die = ln_minus_crshdeath)
+
+#sum up people who didnt die between 16 and 31. 
+     #had issues with this so broke it down to step by step
+     test_ages_14 <- usa_2005$Age >= 0 & usa_2005$Age <= 4
+      head(test_ages) #it worked 
+      
+      sum_didntDie_16_31 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age <= 31, "didnt_die"])
+      sum_didntDie_16_31  #it worked 1523789
+      
+#finally, the equation. 17.92693
+    answ_1a <-  sum_didntDie_16_31/85000
+      answ_1a
+  
+```
+
+B\) Among those who live to age 25 accident-free, what is the probability of experiencing an accident by age 31? Answer: 50.56%
+
+QUESTION, PROB CRASH IS SUM OF PROBS WITHIN SUB POP. NO DENOM
+
+Numerator: Probability of experiencing crash between 25 and 31$(p^i_{16} +p^i_{17}….p^i_{31})$
+
+```{r}
+sum_probdie_16_31 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age <= 31, "prob_crash_die"])
+      sum_probdie_16_31
+
+```
+
+C. Among those who survive to age 16, what is the probability of dying without experiencing an accident by age 31?
+
+Approach 1: (probability of dying between 16 and 31)- (probability of dying in crash between 16 and 31)
+
+pro
+
+(dying/total)-(crash dying/total)
+
+```{r}
+ 
+#dying between 16 and 31 
+sum_died_16_31 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age <= 31, "dx"])
+
+#crash dying
+sum_probdie_16_31 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age <= 31, "prob_crash_die"])
+```
+
+D. If the experience of accidents and the probability of dying are process-dependent, is your estimate for C an overestimate or an underestimate of the true probability?
+
+If a experiencing a crash and the probability of dying is positively correlated, then the estimate is an underestimate. If the correlation is negative, 1c is an over estimate.
+
+E. Extra Credit: Push your code to GitHub and share the link with someone from class. Answer here the name of the person(s) to whom you shared the link.
+
+```{r}
+#first time pushing code through quatro. ACR NOTE UPDATE THIS
+cd /path/to/your/project
+git init
+# Or add all files
+git add .
+
+# Make your first commit
+git commit -m "Add initial .qmd file"
+
+# Add remote repository (replace with your GitHub repo URL)
+git remote add origin https://github.com/yourusername/your-repo-name.git
+
+# Push to GitHub
+git push -u origin main
+
+#ALTERNATIVE QUIT.
+git add . && git commit -m "Update qmd file" && git push origin main
+# Replace main with master if your default branch is named master, and replace the repository URL with your actual GitHub repository URL.
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
