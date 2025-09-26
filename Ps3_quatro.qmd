@@ -39,9 +39,7 @@ Downloading the data and keeping only 2005 life table data
 
 ####Question 1 get life table values directly.
   # Set your HMD credentials. attaches values to names with my creds. will give that info to the webpage when i request entry
-    username <- "acruiz4@wisc.edu"
-    password <- "Milodem25!" 
-    
+
   #next, pull the data. Idk why, but it seems important to run the library before
     library(HMDHFDplus)
       #item: "blt" is building life table, "per" is period life table, "1x1" ys the year increments. 
@@ -177,3 +175,4 @@ git add . && git commit -m "Update qmd file" && git push origin main
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
+
