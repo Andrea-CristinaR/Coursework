@@ -1,0 +1,221 @@
+---
+title: "ps3_MultipleDecrement_b"
+name: "Andrea Cristina Ruiz"
+date: "2025-09-29"
+format: html
+---
+
+## ---
+
+Set up install packages
+
+```{r}
+#settup 
+
+library(rmarkdown)
+library(HMDHFDplus)
+library(dplyr)
+library(ggplot2)
+library(tidyverse) 
+#library(TinyTex)
+#library(miktex)
+#library(pdflatex)
+library(quarto)
+library(tidyverse)
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+Downloading the data and keeping only 2005 life table data
+
+```{r}
+##"Step 1: Obtain the 2005 single year age-specific death probabilities from the Human Mortality Databas"
+#death probability is q_x
+
+####Question 1 get life table values directly.
+  # Set your HMD credentials. attaches values to names with my creds. will give that info to the webpage when i request entry
+   # username <-  DELETED
+   # password <-  DELETED
+    
+  #next, pull the data. Idk why, but it seems important to run the library before
+    #library(HMDHFDplus)
+      #item: "blt" is building life table, "per" is period life table, "1x1" ys the year increments. 
+ 
+    #for USA ALL in 2005 tables. Combines Both sexes
+   # usa_data_pull <- readHMDweb(CNTRY = "USA", 
+                    #             item = "bltper_1x1",
+                     #      username = username,
+                      #     password = password)
+                                    
+      #for USA males in 2005 tables change item to 
+                 #for males item = "mltper_1x1", 
+                  #for females item = "fltper_1x1",  
+   
+#filter to keep only 2005. can use base or dplyr. try using dplyr. "filter() function is used to subset a data frame, retaining all rows that satisfy your conditions. To be retain"
+    
+   # usa_2005 <- usa_data_pull%>% 
+      #        filter(Year == 2005)
+    
+              # View(usa_2005)  #check. I see 111 observations all 2005. Great!
+               
+   #clean up. remove things i dont need 
+   #  rm(usa_data_pull, password, username, usa_data_pull)
+     
+     #worke great all last week but didnt work on 9.30. used excel. 
+usa_2005 <- read.csv("~/PhD Courses/2025 F Courses/Demography/HW/usa_2005_test.csv", sep="")
+
+ head (usa_2005)          
+      saveRDS(usa_2005, file = "usa_2005.rds")
+
+    # Load it back later
+    usa_2005 <- readRDS("usa_2005.rds")
+    class(usa_2005$Age)
+    usa_2005[] <- lapply(usa_2005, as.numeric) #issue for 100+ but that is not relevant for today
+    usa_2005$Age[is.na(usa_2005$Age)] <- 110 #remove NAs
+```
+
+Question 1a) What proportion of Wisconsinites who live to age 16 will live to age 31 without experiencing a motor vehicle crash?\
+Answer:
+
+```         
+0.5956642
+```
+
+Process: A proportion requires a denominator and a numerator. In this problem, the **denominator**, "$l_0$" will be 85,000, total number of people alive at age 16
+
+The **numerator** will be the number of people who **live** to age 31 without a crash, or $l_{16}-l_{31}$ . To find $l_{31}$ I do the following:
+
+-   Estimate crash risk by age to find $q^i_x$ which is probability of a crash and probability of dying (sum)
+
+```{r}
+#first make a new variable for the probability of people dying from crashes in each age . 
+            #didnt work because it didnt call a data frame. QUESTION- how would I update this equation to work better? 
+      #prob_crash_die = 0.062 - 0.000053 * (Age^2)
+
+#second try #mutate the data frame 
+usa_2005 <- usa_2005 %>%
+     mutate(qx_crash = 0.062 - 0.000053 * (Age^2))
+
+
+#calculate probability of crash + probabilit of dying. q+xdie + q_xcrash
+  usa_2005 <- usa_2005 %>%
+         mutate(qx_crash_n_die = qx+qx_crash)
+
+
+#make a wisconsin lx starting at age 16.
+     library(dplyr)
+      usa_2005 <- usa_2005 %>%
+        mutate(lx_wi = ifelse(Age == 16, 85000, NA))
+      
+      #probability of dying is lx0*(1-qx_crash_n_die. Start by calculating age 17 
+        # Calculate Age 17
+        usa_2005$lx_wi[usa_2005$Age == 17] <- 
+              usa_2005$lx_wi[usa_2005$Age == 16] * 
+              (1 - usa_2005$qx_crash_n_die[usa_2005$Age == 16])
+        #extend to all ages 
+          usa_2005 <- usa_2005 %>%   #first arragnge in order
+            arrange(Age)
+        #next- calculate with loop .
+
+          for(age in 18:110) {
+              usa_2005$lx_wi[usa_2005$Age == age] <- 
+                usa_2005$lx_wi[usa_2005$Age == (age - 1)] * 
+                (1 - usa_2005$qx_crash_n_die[usa_2005$Age == (age - 1)])
+            }  #omg it worked yay
+
+#now that I have lx. I can find the numerator.         
+      lxwi16_lxwi31 <- usa_2005$lx_wi[usa_2005$Age == 16] %>%-usa_2005$lx_wi[usa_2005$Age == 31]
+      
+#divide Numerator by denominator 
+     alive31_crash<- (lxwi16_lxwi31 /85000)
+      print (alive31_crash)
+
+    #alive without crash 
+      alive31_nocrash <- (1-alive31_crash)
+print(alive31_nocrash)
+
+```
+
+B\) Among those who live to age 25 accident-free, what is the probability of experiencing an accident by age 31?
+
+Denominator is number of Wi people
+
+Numerator: Probability of experiencing crash between 25 and 31 is the sum of people experiencing $(p^i_{25}*l^{crash}_{25} +p^i_{26}*l^{crash}_{26}….+ p^i_{31}*l^{crash}_{31})$
+
+```{r}
+
+#already calculated probability of crash qx_crash. now estimate dx_crash, number of people* prob of crash. Then sum. 
+
+usa_2005 <- usa_2005 %>%
+  mutate(dx_crash = lx_wi * qx_crash)
+
+#note, dont include 31
+dxcrash_25_30 <- sum(usa_2005[usa_2005$Age >= 25 & usa_2005$Age <= 30, "dx_crash"])     
+print(dxcrash_25_30)
+```
+
+Denominator: Number of people in WI alive at 25
+
+```{r}
+
+deonm1b <- usa_2005$lx_wi[usa_2005$Age == 25]
+
+ans_1b <- dxcrash_25_30/deonm1b
+
+print(ans_1b)
+```
+
+C. Among those who survive to age 16, what is the probability of dying without experiencing an accident by age 31?
+
+Numerator: (probability of dying between 16 and 31)- (probability of dying in crash between 16 and 31)
+
+Denominator: $l_{16}$
+
+```{r}
+ #need dx_wi 
+  # made a mistake first time. removing var 
+  #usa_2005$dx_wi <- NULL
+  
+usa_2005 <- usa_2005 %>%
+  mutate(dx_wi = (qx*lx_wi)) #prob dying in usa * # ppl in Wi
+
+    #did it work? It did!
+    usa_2005 %>%
+      filter(Age >= 16, Age <= 30) %>%
+       
+ 
+#find died and accident 
+    usa_2005 <- usa_2005 %>%
+          mutate(dx_diencrsh = (dx_wi+dx_crash))
+    
+#dying and crash between 16 and 31 
+sum_diencrsh_16_30 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age < 31, "dx_diencrsh"])
+
+#crash experience, non death
+sum_crash_16_31 <- sum(usa_2005[usa_2005$Age >= 16 & usa_2005$Age < 31, "dx_crash"])
+
+#next find numerator. 
+num_1c <- sum_diencrsh_16_30 -sum_crash_16_31 
+
+Ans1c <- (num_1c/85000)
+
+print(num_1c)
+print(Ans1c)
+```
+
+D. If the experience of accidents and the probability of dying are process-dependent, is your estimate for C an overestimate or an underestimate of the true probability?
+
+If a experiencing a crash and the probability of dying is positively correlated, then the estimate is an underestimate. If the correlation is negative, 1c is an over estimate.
+
+E. Extra Credit: Push your code to GitHub and share the link with someone from class. Answer here the name of the person(s) to whom you shared the link.
+
+```{r}
+#first time pushing code through quatro.  
+getwd()
+
+#"C:/Users/Andrea Cristina/OneDrive - UW-Madison/Documents/PhD Courses/2025 F Courses/Demography/HW"
+
+
+```
+
+The `echo: True`option disables the printing of code (only output is displayed).
